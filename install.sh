@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.4   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.5   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -71,13 +71,13 @@ fi
 echo -e "\n[3/5] 正在安装 Python 依赖..."
 
 if [ $IS_OPENWRT -eq 1 ]; then
-    # OpenWrt specific: Remove psutil from requirements to prevent pip from trying to compile it
-    # We already installed python3-psutil via opkg
-    grep -v "psutil" requirements.txt > requirements.tmp && mv requirements.tmp requirements.txt
+    # OpenWrt specific: Force install ONLY Flask and Rich, ignoring requirements.txt to avoid psutil issues
+    echo "OpenWrt detected: Installing dependencies manually to skip psutil compilation..."
+    pip3 install flask rich --break-system-packages 2>/dev/null || pip3 install flask rich
+else
+    # Standard installation
+    pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 fi
-
-# Try standard pip, fallback to --break-system-packages for newer OS
-pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 
 # 4. Configure Service
 echo -e "\n[4/5] 配置后台服务..."

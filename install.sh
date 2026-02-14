@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.5   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.6   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -26,9 +26,9 @@ echo -e "\n[1/5] 正在安装系统依赖..."
 if [ $IS_OPENWRT -eq 1 ]; then
     echo "检测到 OpenWrt 系统..."
     opkg update
-    # Install psutil from repo to avoid compilation
+    # Install python3-flask and python3-psutil from repo to save space and avoid compilation
     # git-http is often huge or problematic on routers, so we rely on curl
-    opkg install python3 python3-pip curl python3-psutil
+    opkg install python3 python3-pip curl python3-psutil python3-flask
 elif command -v apt-get &> /dev/null; then
     apt-get update -qq
     apt-get install -y python3 python3-pip curl
@@ -71,9 +71,18 @@ fi
 echo -e "\n[3/5] 正在安装 Python 依赖..."
 
 if [ $IS_OPENWRT -eq 1 ]; then
-    # OpenWrt specific: Force install ONLY Flask and Rich, ignoring requirements.txt to avoid psutil issues
-    echo "OpenWrt detected: Installing dependencies manually to skip psutil compilation..."
-    pip3 install flask rich --break-system-packages 2>/dev/null || pip3 install flask rich
+    # OpenWrt specific:
+    # 1. psutil is already installed via opkg (python3-psutil)
+    # 2. Flask might be installed via opkg (python3-flask), but if not, we try pip
+    # 3. Rich is NOT installed (optional, saves space)
+    
+    echo "OpenWrt detected: Checking if Flask is installed..."
+    if python3 -c "import flask" 2>/dev/null; then
+        echo "Flask already installed (via opkg), skipping pip install."
+    else
+        echo "Flask not found, installing via pip (minimal mode)..."
+        pip3 install flask --no-cache-dir --break-system-packages
+    fi
 else
     # Standard installation
     pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt

@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.6   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.7   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -29,6 +29,22 @@ if [ $IS_OPENWRT -eq 1 ]; then
     # Install python3-flask and python3-psutil from repo to save space and avoid compilation
     # git-http is often huge or problematic on routers, so we rely on curl
     opkg install python3 python3-pip curl python3-psutil python3-flask
+    
+    # Try to open firewall port 8899
+    echo "Configuring firewall..."
+    if command -v uci &> /dev/null; then
+        uci set firewall.traffic_monitor=rule
+        uci set firewall.traffic_monitor.name='Allow-Traffic-Monitor'
+        uci set firewall.traffic_monitor.src='wan'
+        uci set firewall.traffic_monitor.proto='tcp'
+        uci set firewall.traffic_monitor.dest_port='8899'
+        uci set firewall.traffic_monitor.target='ACCEPT'
+        uci commit firewall
+        /etc/init.d/firewall reload 2>/dev/null || true
+    else
+        # Fallback to iptables
+        iptables -I INPUT -p tcp --dport 8899 -j ACCEPT 2>/dev/null || true
+    fi
 elif command -v apt-get &> /dev/null; then
     apt-get update -qq
     apt-get install -y python3 python3-pip curl
@@ -81,6 +97,8 @@ if [ $IS_OPENWRT -eq 1 ]; then
         echo "Flask already installed (via opkg), skipping pip install."
     else
         echo "Flask not found, installing via pip (minimal mode)..."
+        # Try to clean cache first to free up space
+        rm -rf ~/.cache/pip
         pip3 install flask --no-cache-dir --break-system-packages
     fi
 else

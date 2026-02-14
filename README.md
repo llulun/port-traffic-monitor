@@ -17,36 +17,23 @@
 
 ---
 
-## 🚀 极速部署 (One-Click Deploy)
+## 🚀 极速部署 (一键脚本)
 
-**复制下面的完整命令块**，直接在服务器终端粘贴运行：
+**这是最推荐的安装方式**，不需要 Docker，直接在服务器终端运行：
 
 ```bash
-docker run -d \
-  --name traffic-monitor \
-  --network host \
-  --restart always \
-  -v $(pwd)/traffic-data:/app/data \
-  ghcr.io/llulun/port-traffic-monitor:latest
+curl -O https://raw.githubusercontent.com/llulun/port-traffic-monitor/main/install.sh && sudo bash install.sh
 ```
 
-> **❌ 空间不足报错 (no space left on device)?**
-> 您的服务器磁盘可能满了。请先运行清理命令腾出空间：
-> ```bash
-> docker system prune -a -f
-> ```
-> (注意：这会删除所有未使用的镜像和停止的容器)
-
-> **说明**：
-> *   `--network host`：让容器共享宿主机网络，从而能监控宿主机端口流量。
-> *   `-v $(pwd)/traffic-data:/app/data`：将数据文件挂载到当前目录下的 `traffic-data` 文件夹，防止数据丢失。
-
-> **🔴 无法拉取镜像 (Permission Denied)?**
-> 默认情况下 GitHub Packages 可能是私有的。请前往 GitHub 仓库页面 -> 右侧 "Packages" -> 点击包名 -> "Package settings" -> "Change visibility" -> 设置为 **Public**。
+> **脚本功能**：
+> *   ✅ 自动安装 Python3 和依赖
+> *   ✅ 自动配置后台服务 (Systemd)，开机自启
+> *   ✅ 安装位置：`/opt/traffic-monitor`
+> *   ✅ 默认端口：`8899`
 
 ---
 
-## 💻 本地开发
+## � Docker 部署 (可选)
 
 ### 方式一：直接运行 (Python)
 

@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.2   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.3   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -27,33 +27,45 @@ if [ $IS_OPENWRT -eq 1 ]; then
     echo "检测到 OpenWrt 系统..."
     opkg update
     # Install psutil from repo to avoid compilation
-    opkg install python3 python3-pip git git-http python3-psutil
+    # git-http is often huge or problematic on routers, so we rely on curl
+    opkg install python3 python3-pip curl python3-psutil
 elif command -v apt-get &> /dev/null; then
     apt-get update -qq
-    apt-get install -y python3 python3-pip git
+    apt-get install -y python3 python3-pip curl
 elif command -v yum &> /dev/null; then
-    yum install -y python3 python3-pip git
+    yum install -y python3 python3-pip curl
 elif command -v apk &> /dev/null; then
-    apk add python3 py3-pip git
+    apk add python3 py3-pip curl
 else
-    echo -e "${RED}未检测到支持的包管理器 (opkg/apt/yum/apk)，请手动安装 python3, pip 和 git${NC}"
+    echo -e "${RED}未检测到支持的包管理器 (opkg/apt/yum/apk)，请手动安装 python3, pip 和 curl${NC}"
 fi
 
-# 2. Clone/Update Repository
+# 2. Download Files (No Git Required)
 INSTALL_DIR="/opt/traffic-monitor"
-echo -e "\n[2/5] 正在下载/更新代码..."
-if [ -d "$INSTALL_DIR" ]; then
-    cd "$INSTALL_DIR"
-    git pull
-else
-    # Create dir if not exists (for OpenWrt usually /opt is not default)
-    mkdir -p "$INSTALL_DIR"
-    git clone https://github.com/llulun/port-traffic-monitor.git "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-fi
+echo -e "\n[2/5] 正在下载代码..."
 
-# Create data directory
-mkdir -p data
+# Create dir if not exists
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/static"
+mkdir -p "$INSTALL_DIR/templates"
+mkdir -p "$INSTALL_DIR/data"
+cd "$INSTALL_DIR"
+
+# Download files individually using curl (more robust on routers than git)
+BASE_URL="https://raw.githubusercontent.com/llulun/port-traffic-monitor/main"
+
+echo "Downloading app.py..."
+curl -s -O "$BASE_URL/app.py"
+echo "Downloading requirements.txt..."
+curl -s -O "$BASE_URL/requirements.txt"
+echo "Downloading templates/index.html..."
+curl -s -o "templates/index.html" "$BASE_URL/templates/index.html"
+
+# Verify download
+if [ ! -f "app.py" ] || [ ! -f "requirements.txt" ]; then
+    echo -e "${RED}Error: 文件下载失败！请检查网络连接或 GitHub 访问情况。${NC}"
+    exit 1
+fi
 
 # 3. Install Python Requirements
 echo -e "\n[3/5] 正在安装 Python 依赖..."

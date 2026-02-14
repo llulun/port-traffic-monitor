@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  traffic-monitor:
+    build: .
+    container_name: traffic-monitor
+    restart: always
+    # Vital for monitoring host network and processes
+    network_mode: "host"
+    pid: "host"
+    volumes:
+      - ./traffic_stats.json:/app/traffic_stats.json
+      - ./config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai

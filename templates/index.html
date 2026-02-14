@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流量监控面板 (Port 7788)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { transition: background-color 0.3s, color 0.3s; }
+        .card { 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+            border: none; 
+            transition: transform 0.2s, box-shadow 0.2s; 
+            margin-bottom: 1.5rem;
+        }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        .stat-value { font-size: 1.5rem; font-weight: bold; }
+        .stat-label { font-size: 0.9rem; opacity: 0.8; }
+        #realtime-chart-container, #history-chart-container { height: 400px; width: 100%; }
+        .badge-status { font-size: 0.8rem; padding: 0.5em 0.8em; }
+        .navbar { box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-speedometer2"></i> SS 流量监控 <span id="current-port-display">(Port 7788)</span>
+            </a>
+            <div class="d-flex align-items-center">
+                <!-- System Stats -->
+                <div class="text-light me-3 d-none d-md-block font-monospace" style="font-size: 0.85rem;">
+                    <span title="CPU Usage"><i class="bi bi-cpu"></i> <span id="cpu-usage">0%</span></span>
+                    <span class="mx-2">|</span>
+                    <span title="Memory Usage"><i class="bi bi-memory"></i> <span id="mem-usage">0%</span></span>
+                </div>
+
+                <!-- Port Selector -->
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-light dropdown-toggle btn-sm" type="button" id="portDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        切换端口
+                    </button>
+                    <ul class="dropdown-menu" id="port-list" aria-labelledby="portDropdown">
+                        <!-- Ports will be loaded here -->
+                        <li><a class="dropdown-item" href="#">加载中...</a></li>
+                    </ul>
+                </div>
+                
+                <button class="btn btn-light btn-sm me-3" onclick="promptAddPort()">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+
+                <button class="btn btn-outline-light btn-sm" onclick="toggleTheme()">
+                    <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
+                </button>
+                
+                <div class="dropdown ms-2">
+                    <button class="btn btn-outline-light btn-sm" data-bs-toggle="dropdown">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item text-danger" href="#" onclick="resetCurrentPortData()">🗑️ 重置当前端口数据</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <!-- 状态和连接数 -->
+        <div class="row mb-3">
+             <div class="col-12">
+                 <div class="card bg-light-subtle">
+                     <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                         <div>
+                             <span id="status-badge" class="badge bg-secondary badge-status me-2">检测中...</span>
+                             <span id="process-info" class="text-muted small"></span>
+                         </div>
+                         <div>
+                             <span class="badge bg-info text-dark" title="活跃TCP连接数">
+                                <i class="bi bi-diagram-2"></i> 连接数: <span id="conn-count">0</span>
+                             </span>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        </div>
+
+        <!-- 实时速度卡片 -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card border-start border-4 border-success">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-success">⬆️ 实时上传速度</h6>
+                            <div class="stat-value" id="speed-up">0 B/s</div>
+                        </div>
+                        <i class="bi bi-arrow-up-circle text-success fs-1 opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-start border-4 border-primary">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-primary">⬇️ 实时下载速度</h6>
+                            <div class="stat-value" id="speed-down">0 B/s</div>
+                        </div>
+                        <i class="bi bi-arrow-down-circle text-primary fs-1 opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 统计数据卡片 -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="stat-label">今日上传</div>
+                        <div class="stat-value text-success" id="today-up">0 B</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="stat-label">今日下载</div>
+                        <div class="stat-value text-primary" id="today-down">0 B</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="stat-label">总计上传</div>
+                        <div class="stat-value text-success" id="total-up">0 B</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <div class="stat-label">总计下载</div>
+                        <div class="stat-value text-primary" id="total-down">0 B</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 在线时长 -->
+        <div class="row">
+            <div class="col-12">
+                 <div class="card bg-light-subtle">
+                    <div class="card-body d-flex justify-content-around align-items-center">
+                        <div class="text-center">
+                            <i class="bi bi-clock-history text-warning fs-4 mb-1 d-block"></i>
+                            <span class="stat-label">今日在线: </span>
+                            <span class="fw-bold" id="today-time">0h 0m 0s</span>
+                        </div>
+                        <div class="vr"></div>
+                        <div class="text-center">
+                            <i class="bi bi-hourglass-split text-info fs-4 mb-1 d-block"></i>
+                            <span class="stat-label">总在线: </span>
+                            <span class="fw-bold" id="total-time">0h 0m 0s</span>
+                        </div>
+                    </div>
+                 </div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-transparent fw-bold d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-up"></i> 流量趋势 (24h)</span>
+                        <small class="text-muted fw-normal">1分钟更新一次</small>
+                    </div>
+                    <div class="card-body">
+                        <div id="realtime-chart-container">
+                            <canvas id="trafficChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header bg-transparent fw-bold d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bar-chart-fill"></i> 历史每日流量 (近7天)</span>
+                        <div>
+                            <button class="btn btn-sm btn-outline-success me-1" onclick="exportCSV()" title="导出CSV">
+                                <i class="bi bi-file-earmark-spreadsheet"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="updateHistoryData()">刷新</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="history-chart-container">
+                            <canvas id="historyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Port Modal -->
+    <div class="modal fade" id="addPortModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">添加监控端口</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPortForm" onsubmit="submitAddPort(event)">
+                        <div class="mb-3">
+                            <label for="portInput" class="form-label">端口号 (1-65535)</label>
+                            <input type="number" class="form-control" id="portInput" required min="1" max="65535" placeholder="例如: 80, 443, 3306">
+                            <div class="form-text">请确保该端口已被服务占用，否则无法统计流量。</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="submitAddPort()">确定添加</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系统日志 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-transparent fw-bold">
+                        <i class="bi bi-terminal"></i> 系统事件日志
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="log-container" class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Logs here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPort = 7788; // Default
+
+        // Load Ports on Init
+        fetchPorts();
+
+        function fetchPorts() {
+            fetch('/api/ports')
+                .then(res => res.json())
+                .then(ports => {
+                    const list = document.getElementById('port-list');
+                    list.innerHTML = '';
+                    
+                    if (ports.length > 0 && !ports.includes(currentPort)) {
+                        currentPort = ports[0]; // Auto switch if current deleted
+                    }
+                    
+                    updatePortDisplay();
+
+                    ports.forEach(port => {
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center px-2">
+                                <a class="dropdown-item flex-grow-1" href="#" onclick="switchPort(${port})">Port ${port}</a>
+                                <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="deletePort(${port}, event)" title="删除">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                        list.appendChild(li);
+                    });
+                });
+        }
+
+        function switchPort(port) {
+            currentPort = port;
+            updatePortDisplay();
+            // Reset Charts
+            trafficChart.data.labels = [];
+            trafficChart.data.datasets[0].data = [];
+            trafficChart.data.datasets[1].data = [];
+            trafficChart.update();
+            
+            // Trigger updates
+            updateData();
+            updateSeriesData();
+            updateHistoryData();
+        }
+
+        function updatePortDisplay() {
+            document.getElementById('current-port-display').textContent = `(Port ${currentPort})`;
+        }
+
+        let addPortModal;
+        function promptAddPort() {
+            if (!addPortModal) {
+                addPortModal = new bootstrap.Modal(document.getElementById('addPortModal'));
+            }
+            document.getElementById('portInput').value = '';
+            addPortModal.show();
+        }
+
+        function submitAddPort(event) {
+            if (event) event.preventDefault();
+            
+            const portInput = document.getElementById('portInput');
+            const port = portInput.value;
+            
+            if (port) {
+                fetch('/api/ports', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({port: port})
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        // alert(data.message); // Optional: silent success
+                        if (addPortModal) addPortModal.hide();
+                        fetchPorts();
+                        // Auto switch to new port
+                        setTimeout(() => switchPort(port), 500); 
+                    } else {
+                        alert("错误: " + data.message);
+                    }
+                })
+                .catch(err => alert("网络错误: " + err));
+            }
+        }
+
+        function deletePort(port, event) {
+            event.stopPropagation(); // Prevent dropdown closing or switching
+            if (confirm(`确定要停止监控端口 ${port} 吗？历史数据将保留。`)) {
+                fetch(`/api/ports/${port}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        fetchPorts();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+            }
+        }
+
+        function resetCurrentPortData() {
+            if (confirm(`⚠️ 警告：确定要清空端口 ${currentPort} 的所有流量统计和历史记录吗？此操作不可恢复！`)) {
+                fetch(`/api/stats/${currentPort}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("数据已重置");
+                        switchPort(currentPort); // Refresh
+                    } else {
+                        alert("重置失败: " + data.message);
+                    }
+                });
+            }
+        }
+
+        function updateSystemStats() {
+            fetch('/api/system')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('cpu-usage').textContent = `${data.cpu_percent.toFixed(1)}%`;
+                    document.getElementById('mem-usage').textContent = `${data.memory_percent.toFixed(1)}%`;
+                })
+                .catch(err => console.error(err));
+        }
+        setInterval(updateSystemStats, 2000);
+        updateSystemStats();
+
+        function exportCSV() {
+            window.location.href = `/api/export/${currentPort}`;
+        }
+
+        function updateLogs() {
+            fetch('/api/logs')
+                .then(res => res.json())
+                .then(logs => {
+                    const container = document.getElementById('log-container');
+                    container.innerHTML = '';
+                    logs.forEach(log => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item list-group-item-action py-2';
+                        item.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <small class="text-muted">${log.time}</small>
+                                <small class="fw-bold text-primary">${log.source}</small>
+                            </div>
+                            <p class="mb-0 small">${log.message}</p>
+                        `;
+                        container.appendChild(item);
+                    });
+                });
+        }
+        setInterval(updateLogs, 3000);
+        updateLogs();
+
+        // 主题切换
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-bs-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-bs-theme', next);
+            
+            const icon = document.getElementById('theme-icon');
+            if (next === 'dark') {
+                icon.className = 'bi bi-sun-fill';
+            } else {
+                icon.className = 'bi bi-moon-stars-fill';
+            }
+            
+            // 更新图表颜色适配主题
+            updateChartTheme(next);
+        }
+
+        function updateChartTheme(theme) {
+            const color = theme === 'dark' ? '#adb5bd' : '#666';
+            const gridColor = theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+            
+            [trafficChart, historyChart].forEach(chart => {
+                if (chart) {
+                    chart.options.scales.x.ticks.color = color;
+                    chart.options.scales.y.ticks.color = color;
+                    chart.options.scales.x.grid.color = gridColor;
+                    chart.options.scales.y.grid.color = gridColor;
+                    chart.options.plugins.legend.labels.color = color;
+                    chart.update();
+                }
+            });
+        }
+
+        // 格式化工具
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h}h ${m}m ${s}s`;
+        }
+
+        // 实时图表初始化 (改为24小时趋势)
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        const trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: '上传 (KB/s)',
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        data: [],
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 1.5
+                    },
+                    {
+                        label: '下载 (KB/s)',
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        data: [],
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 1.5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { 
+                        display: true,
+                        grid: { display: false },
+                        ticks: {
+                            maxTicksLimit: 8,
+                            maxRotation: 0
+                        }
+                    }
+                }
+            }
+        });
+
+        // 历史图表初始化
+        const ctxHistory = document.getElementById('historyChart').getContext('2d');
+        const historyChart = new Chart(ctxHistory, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: '上传',
+                        backgroundColor: 'rgba(25, 135, 84, 0.7)',
+                        data: []
+                    },
+                    {
+                        label: '下载',
+                        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                        data: []
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return formatBytes(value); }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + formatBytes(context.raw);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 数据更新逻辑
+        function updateData() {
+            fetch(`/api/stats/${currentPort}`)
+                .then(response => response.json())
+                .then(data => {
+                    // 数值更新
+                    document.getElementById('speed-up').textContent = formatBytes(data.current_speed_up) + '/s';
+                    document.getElementById('speed-down').textContent = formatBytes(data.current_speed_down) + '/s';
+                    
+                    document.getElementById('today-up').textContent = formatBytes(data.today_upload);
+                    document.getElementById('today-down').textContent = formatBytes(data.today_download);
+                    document.getElementById('total-up').textContent = formatBytes(data.total_upload);
+                    document.getElementById('total-down').textContent = formatBytes(data.total_download);
+                    
+                    document.getElementById('today-time').textContent = formatTime(data.today_online_seconds);
+                    document.getElementById('total-time').textContent = formatTime(data.total_online_seconds);
+
+                    // 状态更新
+                    const badge = document.getElementById('status-badge');
+                    const procInfo = document.getElementById('process-info');
+                    const connCount = document.getElementById('conn-count');
+
+                    connCount.textContent = data.connections || 0;
+
+                    if (data.active_pids && data.active_pids.length > 0) {
+                        badge.className = 'badge bg-success badge-status me-2';
+                        badge.textContent = `🟢 运行中`;
+                        
+                        // Show process names
+                        let names = data.process_names || [];
+                        if (names.length > 0) {
+                             procInfo.textContent = `进程: ${names.join(', ')} (PID: ${data.active_pids.join(', ')})`;
+                        } else {
+                             procInfo.textContent = `PID: ${data.active_pids.join(', ')}`;
+                        }
+                    } else {
+                        badge.className = 'badge bg-danger badge-status me-2';
+                        badge.textContent = '🔴 未检测到进程';
+                        procInfo.textContent = '';
+                    }
+
+                    // 实时图表更新 (Series)
+                    // 不再实时push，而是从/api/series获取完整数据（每分钟或每5秒）
+                })
+                .catch(err => console.error('Stats fetch error:', err));
+        }
+
+        function updateSeriesData() {
+            fetch(`/api/series/${currentPort}`)
+                .then(response => response.json())
+                .then(data => {
+                    const labels = data.map(item => item.time);
+                    const ups = data.map(item => item.up / 1024);
+                    const downs = data.map(item => item.down / 1024);
+                    
+                    trafficChart.data.labels = labels;
+                    trafficChart.data.datasets[0].data = ups;
+                    trafficChart.data.datasets[1].data = downs;
+                    trafficChart.update();
+                })
+                .catch(err => console.error('Series fetch error:', err));
+        }
+
+        function updateHistoryData() {
+            fetch(`/api/history/${currentPort}`)
+                .then(response => response.json())
+                .then(data => {
+                    // 处理数据，取最近7天
+                    const dates = Object.keys(data).sort().slice(-7);
+                    const uploads = dates.map(d => data[d].upload);
+                    const downloads = dates.map(d => data[d].download);
+
+                    historyChart.data.labels = dates;
+                    historyChart.data.datasets[0].data = uploads;
+                    historyChart.data.datasets[1].data = downloads;
+                    historyChart.update();
+                })
+                .catch(err => console.error('History fetch error:', err));
+        }
+
+        // 启动循环
+        setInterval(updateData, 1000);
+        updateData();
+        
+        // 趋势数据每5秒刷新一次 (实际上后端是每分钟生成一个点)
+        updateSeriesData();
+        setInterval(updateSeriesData, 5000);
+
+        // 历史数据每分钟刷新一次，或页面加载时刷新
+        updateHistoryData();
+        setInterval(updateHistoryData, 60000);
+    </script>
+</body>
+</html>

@@ -11,13 +11,23 @@ echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
-  echo -e "${RED}Error: 请使用 root 权限运行此脚本 (sudo bash install.sh)${NC}"
+  echo -e "${RED}Error: 请使用 root 权限运行此脚本 (例如: bash install.sh)${NC}"
   exit 1
+fi
+
+# Detect OS/Package Manager
+IS_OPENWRT=0
+if command -v opkg &> /dev/null; then
+    IS_OPENWRT=1
 fi
 
 # 1. Install Dependencies
 echo -e "\n[1/5] 正在安装系统依赖..."
-if command -v apt-get &> /dev/null; then
+if [ $IS_OPENWRT -eq 1 ]; then
+    echo "检测到 OpenWrt 系统..."
+    opkg update
+    opkg install python3 python3-pip git git-http
+elif command -v apt-get &> /dev/null; then
     apt-get update -qq
     apt-get install -y python3 python3-pip git
 elif command -v yum &> /dev/null; then
@@ -25,7 +35,7 @@ elif command -v yum &> /dev/null; then
 elif command -v apk &> /dev/null; then
     apk add python3 py3-pip git
 else
-    echo -e "${RED}未检测到支持的包管理器 (apt/yum/apk)，请手动安装 python3 和 git${NC}"
+    echo -e "${RED}未检测到支持的包管理器 (opkg/apt/yum/apk)，请手动安装 python3, pip 和 git${NC}"
 fi
 
 # 2. Clone/Update Repository
@@ -35,6 +45,8 @@ if [ -d "$INSTALL_DIR" ]; then
     cd "$INSTALL_DIR"
     git pull
 else
+    # Create dir if not exists (for OpenWrt usually /opt is not default)
+    mkdir -p "$INSTALL_DIR"
     git clone https://github.com/llulun/port-traffic-monitor.git "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
@@ -47,11 +59,37 @@ echo -e "\n[3/5] 正在安装 Python 依赖..."
 # Try standard pip, fallback to --break-system-packages for newer OS
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 
-# 4. Configure Systemd Service
+# 4. Configure Service
 echo -e "\n[4/5] 配置后台服务..."
 PYTHON_PATH=$(which python3)
 
-cat > /etc/systemd/system/traffic-monitor.service <<EOF
+if [ $IS_OPENWRT -eq 1 ]; then
+    # OpenWrt (Procd) Configuration
+    cat > /etc/init.d/traffic-monitor <<EOF
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+USE_PROCD=1
+PROG=$PYTHON_PATH
+ARGS="$INSTALL_DIR/app.py"
+
+start_service() {
+    procd_open_instance
+    procd_set_param command \$PROG \$ARGS
+    procd_set_param respawn
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param user root
+    procd_set_param workdir "$INSTALL_DIR"
+    procd_close_instance
+}
+EOF
+    chmod +x /etc/init.d/traffic-monitor
+else
+    # Systemd Configuration
+    cat > /etc/systemd/system/traffic-monitor.service <<EOF
 [Unit]
 Description=Port Traffic Monitor Web Panel
 After=network.target
@@ -67,18 +105,34 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 # 5. Start Service
 echo -e "\n[5/5] 启动服务..."
-systemctl daemon-reload
-systemctl enable traffic-monitor
-systemctl restart traffic-monitor
+if [ $IS_OPENWRT -eq 1 ]; then
+    /etc/init.d/traffic-monitor enable
+    /etc/init.d/traffic-monitor restart
+else
+    systemctl daemon-reload
+    systemctl enable traffic-monitor
+    systemctl restart traffic-monitor
+fi
 
 # Final Output
-IP=$(hostname -I | awk '{print $1}')
+if command -v hostname &> /dev/null && hostname -I &> /dev/null; then
+    IP=$(hostname -I | awk '{print $1}')
+else
+    # Fallback for OpenWrt or minimal systems
+    IP="<服务器IP>"
+fi
+
 echo -e "\n${GREEN}======================================${NC}"
 echo -e "${GREEN}🎉 安装成功！${NC}"
 echo -e "🏠 访问地址: http://$IP:8899"
 echo -e "📂 安装目录: $INSTALL_DIR"
-echo -e "⚙️ 服务状态: systemctl status traffic-monitor"
+if [ $IS_OPENWRT -eq 1 ]; then
+    echo -e "⚙️ 服务管理: /etc/init.d/traffic-monitor {start|stop|restart}"
+else
+    echo -e "⚙️ 服务管理: systemctl status traffic-monitor"
+fi
 echo -e "${GREEN}======================================${NC}"

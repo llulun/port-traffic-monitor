@@ -19,15 +19,16 @@
 
 ## 🚀 极速部署 (一键脚本)
 
-**这是最推荐的安装方式**，不需要 Docker，直接在服务器终端运行：
+**这是最推荐的安装方式**，兼容 Debian/Ubuntu/CentOS/OpenWrt，直接在服务器终端运行：
 
 ```bash
-curl -O https://raw.githubusercontent.com/llulun/port-traffic-monitor/main/install.sh && sudo bash install.sh
+curl -O https://raw.githubusercontent.com/llulun/port-traffic-monitor/main/install.sh && bash install.sh
 ```
 
 > **脚本功能**：
 > *   ✅ 自动安装 Python3 和依赖
-> *   ✅ 自动配置后台服务 (Systemd)，开机自启
+> *   ✅ 自动适配 **OpenWrt** (Procd) 和 **Linux** (Systemd)
+> *   ✅ 开机自启 + 崩溃重启
 > *   ✅ 安装位置：`/opt/traffic-monitor`
 > *   ✅ 默认端口：`8899`
 

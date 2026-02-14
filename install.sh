@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.3   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.4   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -69,6 +69,13 @@ fi
 
 # 3. Install Python Requirements
 echo -e "\n[3/5] 正在安装 Python 依赖..."
+
+if [ $IS_OPENWRT -eq 1 ]; then
+    # OpenWrt specific: Remove psutil from requirements to prevent pip from trying to compile it
+    # We already installed python3-psutil via opkg
+    grep -v "psutil" requirements.txt > requirements.tmp && mv requirements.tmp requirements.txt
+fi
+
 # Try standard pip, fallback to --break-system-packages for newer OS
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 

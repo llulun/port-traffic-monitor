@@ -17,7 +17,27 @@
 
 ---
 
-## 🚀 快速开始
+## 🚀 极速部署 (One-Click Deploy)
+
+无需下载代码，无需手动构建，直接复制以下命令在服务器运行即可：
+
+```bash
+docker run -d \
+  --name traffic-monitor \
+  --network host \
+  --restart always \
+  -v $(pwd)/traffic_stats.json:/app/traffic_stats.json \
+  -v $(pwd)/config.json:/app/config.json \
+  ghcr.io/llulun/port-traffic-monitor:latest
+```
+
+> **说明**：
+> *   `--network host`：让容器共享宿主机网络，从而能监控宿主机端口流量。
+> *   `-v ...`：将数据文件挂载到当前目录，防止容器重启后数据丢失。
+
+---
+
+## 💻 本地开发
 
 ### 方式一：直接运行 (Python)
 

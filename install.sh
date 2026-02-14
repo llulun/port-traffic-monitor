@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}   主机端口流量监控 一键安装脚本   ${NC}"
+echo -e "${GREEN}   主机端口流量监控 一键安装脚本 v1.2   ${NC}"
 echo -e "${GREEN}======================================${NC}"
 
 # Check if running as root
@@ -17,7 +17,7 @@ fi
 
 # Detect OS/Package Manager
 IS_OPENWRT=0
-if command -v opkg &> /dev/null; then
+if [ -f /etc/openwrt_release ] || command -v opkg &> /dev/null; then
     IS_OPENWRT=1
 fi
 
@@ -26,7 +26,8 @@ echo -e "\n[1/5] 正在安装系统依赖..."
 if [ $IS_OPENWRT -eq 1 ]; then
     echo "检测到 OpenWrt 系统..."
     opkg update
-    opkg install python3 python3-pip git git-http
+    # Install psutil from repo to avoid compilation
+    opkg install python3 python3-pip git git-http python3-psutil
 elif command -v apt-get &> /dev/null; then
     apt-get update -qq
     apt-get install -y python3 python3-pip git

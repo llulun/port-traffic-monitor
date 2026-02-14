@@ -10,8 +10,8 @@ from flask import Flask, render_template, jsonify, request, Response, send_from_
 
 # Configuration
 DEFAULT_PORT = 7788
-DATA_FILE = "traffic_stats.json"
-CONFIG_FILE = "config.json"
+DATA_FILE = "data/traffic_stats.json"
+CONFIG_FILE = "data/config.json"
 UPDATE_INTERVAL = 1
 
 app = Flask(__name__)
@@ -22,6 +22,10 @@ def favicon():
 
 class TrafficMonitor:
     def __init__(self):
+        # Ensure data directory exists
+        if not os.path.exists("data"):
+            os.makedirs("data")
+            
         self.config = self.load_config()
         self.ports = set(self.config.get("ports", [DEFAULT_PORT]))
         self.data = self.load_data()

@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Create data directory
+RUN mkdir -p data
+
 # Expose the port (though host mode ignores this)
 EXPOSE 8899
 

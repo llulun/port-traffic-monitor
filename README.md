@@ -19,25 +19,20 @@
 
 ## 🚀 极速部署 (One-Click Deploy)
 
-**复制下面的完整命令块**（包含文件初始化），直接在服务器终端粘贴运行：
+**复制下面的完整命令块**，直接在服务器终端粘贴运行：
 
 ```bash
-# 1. 创建必要的空配置文件（防止 Docker 自动将其创建为目录）
-touch config.json traffic_stats.json
-
-# 2. 写入默认配置（如果文件为空）
-if [ ! -s config.json ]; then echo '{"ports": [7788]}' > config.json; fi
-if [ ! -s traffic_stats.json ]; then echo '{}' > traffic_stats.json; fi
-
-# 3. 启动容器
 docker run -d \
   --name traffic-monitor \
   --network host \
   --restart always \
-  -v $(pwd)/traffic_stats.json:/app/traffic_stats.json \
-  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/traffic-data:/app/data \
   ghcr.io/llulun/port-traffic-monitor:latest
 ```
+
+> **说明**：
+> *   `--network host`：让容器共享宿主机网络，从而能监控宿主机端口流量。
+> *   `-v $(pwd)/traffic-data:/app/data`：将数据文件挂载到当前目录下的 `traffic-data` 文件夹，防止数据丢失。
 
 > **🔴 无法拉取镜像 (Permission Denied)?**
 > 默认情况下 GitHub Packages 可能是私有的。请前往 GitHub 仓库页面 -> 右侧 "Packages" -> 点击包名 -> "Package settings" -> "Change visibility" -> 设置为 **Public**。

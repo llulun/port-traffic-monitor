@@ -30,6 +30,13 @@ docker run -d \
   ghcr.io/llulun/port-traffic-monitor:latest
 ```
 
+> **❌ 空间不足报错 (no space left on device)?**
+> 您的服务器磁盘可能满了。请先运行清理命令腾出空间：
+> ```bash
+> docker system prune -a -f
+> ```
+> (注意：这会删除所有未使用的镜像和停止的容器)
+
 > **说明**：
 > *   `--network host`：让容器共享宿主机网络，从而能监控宿主机端口流量。
 > *   `-v $(pwd)/traffic-data:/app/data`：将数据文件挂载到当前目录下的 `traffic-data` 文件夹，防止数据丢失。
